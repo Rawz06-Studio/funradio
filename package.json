@@ -1,6 +1,6 @@
 {
   "name": "funradio-proxy",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Proxy pour FunRadio Anthology avec renouvellement automatique et suppression des pubs",
   "main": "server.js",
   "scripts": {
