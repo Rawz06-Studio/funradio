@@ -21,6 +21,6 @@ jobs:
       contents: write   # Nécessaire pour les tags/releases
       packages: write   # Nécessaire pour Docker/Maven/NPM
     with:
-      image_name: rslwebsite
+      image_name: funradio
       dokploy_app_id: 7nA1Zu_HQEaaQfGkWMWzW
     secrets: inherit
