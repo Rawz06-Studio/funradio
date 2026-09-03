@@ -1,167 +1,152 @@
 # 🎙️ FunRadio Anthology Proxy
 
-Un proxy qui scrape FunRadio Anthology, supprime les pubs et fournit une URL stable/permanente pour écouter en streaming.
+A self-hosted proxy that scrapes FunRadio Anthology, filters out ads, and exposes a permanent, stable URL for HLS streaming.
 
-## 🎯 Fonctionnalités
+## ✨ Features
 
-- ✅ **URL stable** - Même URL pour écouter en permanence (pas besoin de retélécharger le m3u8)
-- ✅ **Renouvellement automatique** - Récupère une nouvelle URL toutes les 23h avant expiration
-- ✅ **Suppression des pubs** - Teste différentes variantes pour trouver le flux sans publicités
-- ✅ **Scraping automatique** - Extrait l'URL de funradio.fr
-- ✅ **Health check** - Endpoint pour vérifier l'état du proxy
+| Feature | Description |
+|---|---|
+| **Stable URL** | One permanent URL for playback — no need to re-fetch the m3u8 manually |
+| **Automatic renewal** | Refreshes the stream URL every 23h, ahead of expiration |
+| **Ad removal** | Tests multiple stream variants to find the ad-free one |
+| **Live scraping** | Extracts the stream URL directly from funradio.fr |
+| **Health check** | Dedicated endpoint to monitor proxy status |
 
-## 📋 Prérequis
+## 📋 Requirements
 
-- Docker & Docker Compose (recommandé)
-- Ou Node.js 18+ en local
+- **Docker** + Docker Compose *(recommended)*
+- Or **Node.js 18+** for running locally (uses `pnpm`)
 
-## 🚀 Démarrage
+## 🚀 Getting Started
 
-### Avec Docker (en local)
+### Option 1 — Docker (local)
 
 ```bash
 docker build -t funradio-proxy .
 docker run -p 8080:8080 funradio-proxy
-```
 
-Vérifier que ça fonctionne:
-```bash
+# Verify
 curl http://localhost:8080/health
 ```
 
-### Avec Dokploy (recommandé - production)
+### Option 2 — Docker Compose (self-hosted server)
 
-1. **Push sur GitHub** - Le workflow GitHub Actions se charge du reste
-   ```bash
-   git push origin main
-   ```
+```bash
+git clone <repo-url>
+cd funradio-proxy
+docker compose up -d
+```
 
-2. **Configurer Dokploy:**
-   - Crée une app sur Dokploy
-   - Définir les secrets GitHub:
-     - `DOKPLOY_WEBHOOK`: URL webhook de déploiement
+The stable URL to use everywhere is then:
 
-3. **Les déploiements sont automatiques** après chaque push sur `main`
+```
+http://<SERVER_IP>:8080/stream.m3u8
+```
 
-### Sans Docker (en local)
+### Option 3 — Dokploy (recommended for production)
+
+Deployments are automated via GitHub Actions on every push to `main`:
+
+1. **Create an application** in Dokploy for this repository.
+2. **Add the GitHub secret** `DOKPLOY_WEBHOOK` containing the deployment webhook URL.
+3. Push to `main` — the workflow handles the rest.
+
+### Option 4 — Node.js (no Docker)
 
 ```bash
 pnpm install
 pnpm start
 ```
 
-## 📡 Utilisation
+## 📡 Usage
 
-### Endpoint principal
+### Main endpoint
 
 ```
 GET http://localhost:8080/stream.m3u8
 ```
 
-Utilise cette URL dans:
-- VLC: `Media > Open Network Stream > http://localhost:8080/stream.m3u8`
-- Kodi, Plex, ou n'importe quel lecteur HLS
-- Ton téléphone (via l'IP du serveur): `http://192.168.x.x:8080/stream.m3u8`
+Works with any HLS-capable player:
 
-### Endpoints utiles
+- **VLC** — `Media > Open Network Stream`
+- **Kodi / Plex** — add the URL as a network stream
+- **Mobile** — replace `localhost` with your server's IP (`http://192.168.x.x:8080/stream.m3u8`)
 
-- **Health check**: `http://localhost:8080/health`
-  ```json
-  {
-    "status": "ok",
-    "streamAvailable": true,
-    "lastRefresh": "2026-09-02T10:30:45.123Z"
-  }
-  ```
+### Auxiliary endpoints
 
-- **Forcer un refresh**: `http://localhost:8080/refresh`
-  - Utile si le stream expire plus tôt que prévu
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Status check — returns stream availability and last refresh timestamp |
+| `GET /refresh` | Force a manual re-scrape (useful if the stream expires early) |
+
+Example `/health` response:
+
+```json
+{
+  "status": "ok",
+  "streamAvailable": true,
+  "lastRefresh": "2026-09-02T10:30:45.123Z"
+}
+```
 
 ## 🔧 Configuration
 
-Variables d'environnement:
+Environment variables (also configurable in `docker-compose.yml`):
 
-```bash
-PORT=8080              # Port du serveur (défaut: 8080)
-NODE_ENV=production    # Mode production (défaut: production)
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `8080` | Server listen port |
+| `NODE_ENV` | `production` | Runtime mode |
+
+## 🏗️ Architecture
+
+```
+funradio.fr ──► Scraper ──► Cleaner ──► Cache (24h) ──► Server
+                  │            │                          │
+           extracts       tests 3 variants         exposes /stream.m3u8
+             m3u8        to strip ads               (redirects to stream)
 ```
 
-Modifier dans `docker-compose.yml` si besoin d'un port différent.
+1. **Scraper** — extracts the m3u8 URL from funradio.fr
+2. **Cleaner** — tries 3 variants to find the ad-free stream
+3. **Cache** — holds the URL for 24 hours
+4. **Server** — serves `/stream.m3u8`, redirecting to the live URL
+5. **Auto-refresh** — renews the stream every 23 hours
 
-## 🧪 Tester localement
+## 📊 Observability
 
-```bash
-# Test du scraping
-curl http://localhost:8080/health
-
-# Récupérer le m3u8
-curl http://localhost:8080/stream.m3u8
-
-# Forcer refresh
-curl http://localhost:8080/refresh
-```
-
-## 📝 Logs
-
-Pour voir les logs en direct:
+Tail the logs in real time:
 
 ```bash
-docker-compose logs -f funradio-proxy
+docker compose logs -f funradio-proxy
 ```
 
-Logs importants:
-- `✅ URL trouvée` - Scraping réussi
-- `✅ URL valide trouvée!` - Variante sans pub trouvée
-- `🧪 Test:` - Test des variantes
+Key log lines:
 
-## 🎚️ Architecture
-
-1. **Scraper** - Extrait l'URL m3u8 de funradio.fr
-2. **Cleaner** - Teste 3 variantes pour enlever les pubs
-3. **Cache** - Garde l'URL en cache 24h
-4. **Server** - Expose `/stream.m3u8` qui redirige vers l'URL
-5. **Auto-refresh** - Actualise toutes les 23h
+| Log | Meaning |
+|---|---|
+| `✅ URL trouvée` | Scraping succeeded |
+| `✅ URL valide trouvée!` | Ad-free variant found |
+| `🧪 Test:` | Testing a stream variant |
 
 ## 🐛 Troubleshooting
 
-### "Impossible de récupérer le stream"
-- Vérifie la connexion internet
-- Vérifie que funradio.fr est accessible
-- Force un refresh: `curl http://localhost:8080/refresh`
+**"Impossible de récupérer le stream"**
+- Check your internet connection and that `funradio.fr` is reachable.
+- Force a refresh: `curl http://localhost:8080/refresh`
 
-### "Aucune variante ne fonctionne"
-- Le scraping a peut-être échoué
-- Consulte les logs: `docker-compose logs`
-- Vérifiez que le HTML de funradio.fr n'a pas changé
+**"Aucune variante ne fonctionne"**
+- Scraping likely failed — inspect the logs (`docker compose logs`).
+- The HTML structure of funradio.fr may have changed; verify the scraper still matches it.
 
-### Docker refuse de démarrer
+**Docker won't start**
 ```bash
-# Rebuild l'image
-docker-compose build --no-cache
-docker-compose up -d
+docker compose build --no-cache
+docker compose up -d
 ```
 
-## 📦 Déploiement sur serveur
+## ⚖️ License
 
-```bash
-# Sur ton serveur
-git clone <repo>
-cd funradio-proxy
-docker-compose up -d
+MIT — do whatever you want, at your own risk.
 
-# Vérifier
-curl http://localhost:8080/health
-```
-
-L'URL stable à utiliser partout:
-```
-http://[IP_DU_SERVEUR]:8080/stream.m3u8
-```
-
-## 📄 Licence
-
-MIT - Fais ce que tu veux avec, mais at your own risk ;)
-
----
-
-**Note**: Ce proxy respecte l'utilisation personnelle. Ne partage pas l'URL publiquement (c'est pour ton usage perso).
+> ⚠️ **Disclaimer:** This proxy is intended for personal use only. Do not publicly share the stream URL.
